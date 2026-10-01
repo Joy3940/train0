@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 챔피언 교육신청 인원 조사 (2027~2029)</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--tx:#1d2733;--mu:#6b7785;--ac:#1f5fbf;--bd:#d9e0e8;--er:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 "Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+.w{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:8px 0 4px}.s{color:var(--mu);font-size:13px;margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+label{display:block;font-size:13px;color:var(--mu);margin-bottom:3px}
+input,select{width:100%;padding:8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--tx);font:inherit}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.btn{border:0;background:var(--ac);color:#fff;padding:9px 18px;border-radius:8px;cursor:pointer;font:inherit;margin-right:6px}
+.btn.g{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+.x{background:transparent;border:1px solid var(--bd);color:var(--er);border-radius:6px;cursor:pointer;padding:2px 8px}
+.ov{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{border-bottom:1px solid var(--bd);padding:8px;text-align:left;white-space:nowrap}
+th{background:var(--bg);color:var(--mu)}
+.n{text-align:right!important}
+tr.t td{font-weight:700;background:var(--bg);border-top:2px solid var(--ac)}
+#st{font-size:13px;color:var(--mu);margin-top:8px;min-height:20px}
+@media(max-width:640px){.g2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="w">
+<h1>AI 챔피언 교육신청 인원 조사</h1>
+<p class="s">2027~2029년 연도별 교육신청 인원을 입력하세요. 같은 희망자·부서로 다시 제출하면 기존 내용이 수정됩니다. 응답은 이 브라우저에 저장되며, 여러 명의 응답은 CSV로 모아 합칠 수 있습니다.</p>
+
+<p class="s" id="mode"></p>
+<div class="card">
+<div class="g2">
+<div><label>희망자 *</label><input id="name" placeholder="예: 홍길동"></div>
+<div><label>부서 *</label><select id="dept"><option value="">부서 선택</option></select></div>
+</div>
+<div class="g3">
+<div><label>2027년 신청 인원</label><input id="y2027" type="number" min="0" step="1" value="0"></div>
+<div><label>2028년 신청 인원</label><input id="y2028" type="number" min="0" step="1" value="0"></div>
+<div><label>2029년 신청 인원</label><input id="y2029" type="number" min="0" step="1" value="0"></div>
+</div>
+<button class="btn" id="go">제출하기</button>
+<div id="st"></div>
+</div>
+
+<div class="card"><b>부서별 · 연도별 집계</b><div class="ov" id="agg"></div></div>
+<div class="card"><b>제출 현황</b><div class="ov" id="lst"></div></div>
+
+<div class="card">
+<b>데이터 취합</b>
+<p class="s">각자 제출한 뒤 CSV를 내려받아 취합 담당자에게 보내고, 담당자는 아래에서 불러와 합칩니다.</p>
+<button class="btn" id="exp">CSV 내려받기</button>
+<button class="btn g" id="impb">CSV 불러오기(합치기)</button>
+<input type="file" id="imp" accept=".csv" style="display:none">
+<button class="btn g" id="clr" style="color:var(--er);border-color:var(--er)">전체 삭제</button>
+</div>
+</div>
+
+<script>
+var DEPTS=["행정기획과","생산지원과","지정기록관리과","기록보존과","기록서비스과"],Y=[2027,2028,2029],KEY="ai_champion_count_v1";
+var $=function(s){return document.querySelector(s)};
+/* ===== 설정: 구글 Apps Script 웹 앱 주소(URL)를 아래 따옴표 안에 붙여 넣으세요 =====
+   예) var SCRIPT_URL="https://script.google.com/macros/s/XXXXXXXX/exec";
+   비워 두면 이 브라우저에만 저장되는 개인 모드로 동작합니다. */
+var SCRIPT_URL="https://script.google.com/macros/s/AKfycbx8fYAjCVVV-20RyGkXeHxfbnPg0w18bGfq_QvjjsGLB3KCkA9bU8hZUEDL2yWOr1mzKA/exec";
+var db=[],SERVER=false;
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function num(v){return Math.max(0,Math.floor(Number(v)||0))}
+function st(t,err){var e=$("#st");e.textContent=t;e.style.color=err?"var(--er)":"var(--mu)"}
+function load(){try{db=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){db=[]}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db));return true}catch(e){st("브라우저 저장소를 쓸 수 없습니다. 제출 후 CSV로 내려받아 보관하세요.",1);return false}}
+function api(m,p,b){return fetch("/api/responses"+(p||""),{method:m,headers:{"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})}
+function scall(p){
+ var u=SCRIPT_URL+(SCRIPT_URL.indexOf("?")<0?"?":"&")+Object.keys(p).map(function(k){return k+"="+encodeURIComponent(p[k])}).join("&");
+ return fetch(u).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(j){if(j.error)throw new Error(j.error);return j});
+}
+function dbGet(){return scall({action:"list"}).then(function(j){return j.rows||[]})}
+function dbPut(list){
+ return list.reduce(function(p,d){return p.then(function(){return scall({action:"save",name:d.name,dept:d.dept,y2027:d.y2027,y2028:d.y2028,y2029:d.y2029})})},Promise.resolve());
+}
+function dbDel(k){var i=k.lastIndexOf("|");return scall({action:"delete",name:k.slice(0,i),dept:k.slice(i+1)})}
+function dbClear(){return scall({action:"clear"})}
+function refresh(){return dbGet().then(function(a){db=a;render()})}
+function fail(){st("구글 시트에 연결하지 못했습니다. SCRIPT_URL과 배포 설정(액세스: 모든 사용자)을 확인해 주세요.",1)}
+function upsert(list,done){
+ if(SERVER){dbPut(list).then(refresh).then(done).catch(fail);return}
+ list.forEach(function(d){var i=db.findIndex(function(r){return key(r)===key(d)});if(i>-1)db[i]=d;else db.push(d)});
+ if(save()){render();done()}
+}
+function key(r){return r.name+"|"+r.dept}
+function oi(d){var i=DEPTS.indexOf(d);return i<0?99:i}
+
+function render(){
+ var by={},tot={},all=0;
+ DEPTS.forEach(function(d){by[d]={2027:0,2028:0,2029:0}});
+ db.forEach(function(r){var o=by[r.dept]||(by[r.dept]={2027:0,2028:0,2029:0});Y.forEach(function(y){o[y]+=num(r["y"+y])})});
+ var ds=DEPTS.concat(Object.keys(by).filter(function(d){return DEPTS.indexOf(d)<0}).sort());
+ Y.forEach(function(y){tot[y]=ds.reduce(function(a,d){return a+by[d][y]},0);all+=tot[y]});
+ $("#agg").innerHTML='<table><tr><th>부서</th>'+Y.map(function(y){return '<th class="n">'+y+'년</th>'}).join("")+'<th class="n">합계</th></tr>'+
+  ds.map(function(d){return '<tr><td>'+esc(d)+'</td>'+Y.map(function(y){return '<td class="n">'+by[d][y]+'</td>'}).join("")+'<td class="n">'+Y.reduce(function(a,y){return a+by[d][y]},0)+'</td></tr>'}).join("")+
+  '<tr class="t"><td>연도별 총계</td>'+Y.map(function(y){return '<td class="n">'+tot[y]+'</td>'}).join("")+'<td class="n">'+all+'</td></tr></table>';
+ var L=db.slice().sort(function(a,b){return oi(a.dept)-oi(b.dept)||a.name.localeCompare(b.name,"ko")});
+ $("#lst").innerHTML=L.length?'<table><tr><th>희망자</th><th>부서</th>'+Y.map(function(y){return '<th class="n">'+y+'</th>'}).join("")+'<th></th></tr>'+
+  L.map(function(r){return '<tr><td>'+esc(r.name)+'</td><td>'+esc(r.dept)+'</td>'+Y.map(function(y){return '<td class="n">'+num(r["y"+y])+'</td>'}).join("")+'<td><button class="x" data-k="'+esc(key(r))+'">삭제</button></td></tr>'}).join("")+'</table>':'<p class="s">제출 내역이 없습니다.</p>';
+ Array.prototype.forEach.call($("#lst").querySelectorAll("[data-k]"),function(b){b.onclick=function(){
+  if(!confirm("이 제출 내역을 삭제할까요?"))return;
+  var k=b.getAttribute("data-k");
+  if(SERVER){dbDel(k).then(refresh).catch(fail);return}
+  db=db.filter(function(r){return key(r)!==k});save();render()}});
+}
+
+$("#go").onclick=function(){
+ var name=$("#name").value.trim(),dept=$("#dept").value;
+ if(!name){st("희망자 이름을 입력해 주세요.",1);return}
+ if(!dept){st("부서를 선택해 주세요.",1);return}
+ var d={name:name,dept:dept};
+ Y.forEach(function(y){d["y"+y]=num($("#y"+y).value);$("#y"+y).value=d["y"+y]});
+ var ex=db.some(function(r){return key(r)===key(d)});
+ upsert([d],function(){st(ex?"기존 제출 내용을 수정했습니다.":"제출되었습니다. 집계에 반영되었습니다.")});
+};
+
+// CSV
+function q(v){return '"'+String(v).replace(/"/g,'""')+'"'}
+$("#exp").onclick=function(){
+ if(!db.length){st("내보낼 데이터가 없습니다.",1);return}
+ var rows=[["희망자","부서","2027","2028","2029"].map(q).join(",")].concat(db.map(function(r){return [r.name,r.dept,r.y2027,r.y2028,r.y2029].map(q).join(",")}));
+ var a=document.createElement("a");
+ a.href=URL.createObjectURL(new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}));
+ a.download="AI챔피언_교육신청_인원.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+};
+function parseCSV(t){
+ t=t.replace(/^\ufeff/,"");var out=[],row=[],c="",inq=false,i,ch;
+ for(i=0;i<t.length;i++){ch=t[i];
+  if(inq){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else inq=false}else c+=ch}
+  else if(ch=='"')inq=true;
+  else if(ch==","){row.push(c);c=""}
+  else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;row.push(c);c="";if(row.some(function(x){return x!==""}))out.push(row);row=[]}
+  else c+=ch}
+ if(c!==""||row.length){row.push(c);out.push(row)}
+ return out;
+}
+$("#impb").onclick=function(){$("#imp").click()};
+$("#imp").onchange=function(e){
+ var f=e.target.files[0];if(!f)return;
+ var rd=new FileReader();
+ rd.onload=function(){
+  try{
+   var rows=parseCSV(rd.result);
+   if(!rows.length||rows[0][0]!=="희망자")throw 0;
+   var list=[];
+   rows.slice(1).forEach(function(r){
+    if(!r[0]||!r[1])return;
+    var d={name:r[0].trim(),dept:r[1].trim(),y2027:num(r[2]),y2028:num(r[3]),y2029:num(r[4])};
+    list.push(d);
+   });
+   if(!list.length){st("불러올 데이터가 없습니다.",1);e.target.value="";return}
+   upsert(list,function(){st(list.length+"건을 불러왔습니다. (같은 희망자·부서는 최신 값으로 덮어씀)")});
+  }catch(err){st("올바른 CSV 형식이 아닙니다. 이 페이지에서 내려받은 파일을 사용해 주세요.",1)}
+  e.target.value="";
+ };
+ rd.readAsText(f,"utf-8");
+};
+$("#clr").onclick=function(){if(confirm("저장된 모든 응답을 삭제합니다. 계속할까요?")){if(SERVER){dbClear().then(refresh).then(function(){st("삭제되었습니다.")}).catch(fail)}else{db=[];save();render();st("삭제되었습니다.")}}};
+
+DEPTS.forEach(function(d){$("#dept").add(new Option(d,d))});
+load();render();
+var LOCALMSG="개인 저장 모드: 이 브라우저에만 저장됩니다. (공유하려면 코드 상단의 SCRIPT_URL을 설정하세요)";
+if(SCRIPT_URL){
+ dbGet().then(function(a){
+  SERVER=true;db=a;render();$("#mode").textContent="구글 시트 연결됨: 모든 사람의 응답이 한곳에 모이고 5초마다 자동 갱신됩니다.";
+  setInterval(function(){refresh().catch(function(){})},5000);
+ }).catch(function(){$("#mode").textContent="구글 시트에 연결하지 못했습니다. SCRIPT_URL과 배포 설정을 확인하세요. (현재 개인 저장 모드)"});
+}else $("#mode").textContent=LOCALMSG;
+</script>
+</body>
+</html>
